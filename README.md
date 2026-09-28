@@ -21,3 +21,7 @@ login.html handles authentication (login, registration).
 dashboard.html handles all functionality of the to-do list.
 
 All JavaScript and CSS is inlined into the above two .html files.
+
+# Quick Start Guide
+
+To start the web server, make sure you have Node.js installed, then open a terminal in the repo directory and run ```Node server.js```.
