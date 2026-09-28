@@ -29,7 +29,7 @@ const requestListener = (req, res) => {
 
     // if no path is given, default to index.html
     if(reqPath == "/") {
-    reqPath = "/index.html";
+    reqPath = "/login.html";
     }
     // Resolve path and check it stays within publicDir
     // The "." prefix prevents absolute paths from being resolved incorrectly

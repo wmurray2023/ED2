@@ -336,6 +336,7 @@
                 await Parse.User.logOut();
                 showToast('info', 'Logged out successfully');
                 checkAuthSession();
+                window.location.href = "/login.html";
             } catch (error) {
                 showToast('error', error.message || 'Logout failed');
             }
