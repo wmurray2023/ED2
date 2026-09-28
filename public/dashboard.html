@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parse Todo Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Font Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Parse JavaScript SDK -->
+    <script src="https://npmcdn.com/parse/dist/parse.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(168, 85, 247, 0.12) 0px, transparent 50%);
+            min-height: 100vh;
+        }
+
+        .form-fade-in {
+            animation: fadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .spinner {
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-top: 2px solid #ffffff;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Custom scrollbar for task list */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(51, 65, 85, 0.8);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(71, 85, 105, 1);
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen text-slate-100 antialiased">
+
+    <!-- Top Navigation Bar -->
+    <header class="w-full bg-slate-900/80 backdrop-blur-xl border-b border-slate-800/80 sticky top-0 z-30">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+            <!-- Brand Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-sm">
+                    <i class="fa-solid fa-list-check text-lg"></i>
+                </div>
+                <div>
+                    <span class="font-bold text-white tracking-tight text-base">Parse Task</span>
+                    <span class="text-xs text-slate-400 block -mt-1 font-normal">Dashboard</span>
+                </div>
+            </div>
+
+            <!-- Credentials & User Menu -->
+            <div class="flex items-center gap-3">
+                <button onclick="toggleConfigModal()" class="px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-medium border border-slate-700/60 transition flex items-center gap-2">
+                    <i class="fa-solid fa-key text-indigo-400"></i>
+                    <span class="hidden sm:inline">SDK Credentials</span>
+                </button>
+
+                <div id="user-pill" class="hidden flex items-center gap-3 bg-slate-950/60 border border-slate-800/80 px-3 py-1.5 rounded-xl">
+                    <div class="flex items-center gap-2 text-xs font-medium text-slate-300">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span id="user-display-name">User</span>
+                    </div>
+                    <button onclick="handleLogout()" class="text-xs text-slate-400 hover:text-rose-400 transition ml-1" title="Log Out">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Credentials Modal -->
+    <div id="config-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative form-fade-in">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2 text-indigo-400 font-semibold text-base">
+                    <i class="fa-solid fa-sliders"></i>
+                    <span>Parse API Configuration</span>
+                </div>
+                <button onclick="toggleConfigModal()" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <p class="text-xs text-slate-400 mb-5 leading-relaxed">
+                Configure your Parse App credentials. Updates will re-initialize the SDK session dynamically.
+            </p>
+
+            <form onsubmit="saveCredentials(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Application ID</label>
+                    <input type="text" id="cfg-app-id" required class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-slate-100 outline-none transition">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Client Key</label>
+                    <input type="text" id="cfg-client-key" required class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-slate-100 outline-none transition">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Server URL</label>
+                    <input type="url" id="cfg-server-url" required class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-slate-100 outline-none transition">
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="toggleConfigModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium transition">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-medium transition shadow-lg shadow-indigo-600/20">Apply Settings</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-8 flex flex-col justify-start">
+
+        <!-- Unauthenticated State View -->
+        <section id="unauth-view" class="w-full max-w-md mx-auto my-auto py-12 text-center form-fade-in">
+            <div class="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-8 shadow-2xl backdrop-blur-xl">
+                <div class="w-16 h-16 rounded-2xl bg-indigo-600/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mx-auto mb-4">
+                    <i class="fa-solid fa-user-lock text-2xl"></i>
+                </div>
+                <h2 class="text-xl font-bold text-white mb-2">Authentication Required</h2>
+                <p class="text-xs text-slate-400 mb-6 leading-relaxed">
+                    You need an active session to manage your task database. Please authenticate using the login module or test with your credentials.
+                </p>
+                <div class="p-4 bg-slate-950/60 border border-slate-800 rounded-xl mb-6 text-left text-xs space-y-2">
+                    <div class="flex items-center gap-2 text-slate-300">
+                        <i class="fa-solid fa-circle-info text-indigo-400"></i>
+                        <span class="font-medium">Active Session Status:</span>
+                    </div>
+                    <p class="text-slate-400 pl-5" id="session-status-text">No active user session detected on Parse server.</p>
+                </div>
+                <button onclick="toggleConfigModal()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2.5 px-4 rounded-xl text-xs transition shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-gear"></i>
+                    <span>Verify API Keys / App ID</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Authenticated Dashboard View -->
+        <section id="auth-view" class="hidden space-y-6 form-fade-in">
+            
+            <!-- Welcome Header Card -->
+            <div class="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 backdrop-blur-xl">
+                <div>
+                    <h1 class="text-2xl font-bold text-white tracking-tight">Your Tasks</h1>
+                    <p class="text-xs text-slate-400 mt-1">Manage your personal items stored securely with Parse Class ACLs.</p>
+                </div>
+
+                <!-- Summary Badges -->
+                <div class="flex items-center gap-2 text-xs">
+                    <span id="badge-total" class="px-3 py-1.5 bg-slate-950/80 border border-slate-800 rounded-xl text-slate-300">0 Total</span>
+                    <span id="badge-pending" class="px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-300">0 Active</span>
+                    <span id="badge-completed" class="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">0 Done</span>
+                </div>
+            </div>
+
+            <!-- Create Task Bar -->
+            <div class="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 shadow-xl backdrop-blur-xl">
+                <form onsubmit="handleCreateTodo(event)" class="flex gap-2">
+                    <input type="text" id="new-todo-title" placeholder="Add a new task..." required class="flex-1 bg-slate-950/80 border border-slate-800/80 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 outline-none transition">
+                    <button type="submit" id="btn-add-todo" class="bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-medium px-5 py-2.5 rounded-xl text-xs transition shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-plus"></i>
+                        <span class="hidden sm:inline">Add Task</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Task Controls Bar (Search + Filters) -->
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900/40 p-2 rounded-2xl border border-slate-800/40">
+                <!-- Search Input -->
+                <div class="relative w-full sm:w-64">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-500">
+                        <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                    </span>
+                    <input type="text" id="search-todo" oninput="applyFilterAndSearch()" placeholder="Search tasks..." class="w-full bg-slate-950/60 border border-slate-800 focus:border-indigo-500 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 outline-none transition">
+                </div>
+
+                <!-- Filter Tabs -->
+                <div class="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800/80 w-full sm:w-auto justify-center">
+                    <button onclick="setFilter('all')" id="filter-all" class="filter-btn px-3 py-1 text-xs font-medium rounded-lg transition bg-indigo-600 text-white">All</button>
+                    <button onclick="setFilter('active')" id="filter-active" class="filter-btn px-3 py-1 text-xs font-medium rounded-lg transition text-slate-400 hover:text-white">Active</button>
+                    <button onclick="setFilter('completed')" id="filter-completed" class="filter-btn px-3 py-1 text-xs font-medium rounded-lg transition text-slate-400 hover:text-white">Completed</button>
+                </div>
+            </div>
+
+            <!-- Task List Container -->
+            <div id="todo-list-container" class="space-y-2 min-h-[220px]">
+                <!-- Dynamic Items Inserted Here -->
+            </div>
+
+        </section>
+
+        <!-- Toast Notification Widget -->
+        <div id="toast" class="fixed bottom-6 right-6 max-w-sm z-50 hidden p-4 rounded-xl border shadow-2xl text-xs font-medium flex items-center gap-3 backdrop-blur-md">
+            <i id="toast-icon" class="text-base"></i>
+            <span id="toast-message" class="flex-1"></span>
+        </div>
+
+    </main>
+
+    <!-- Edit Todo Modal -->
+    <div id="edit-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative form-fade-in">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2 text-indigo-400 font-semibold text-base">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                    <span>Edit Task</span>
+                </div>
+                <button onclick="closeEditModal()" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <form onsubmit="handleSaveEdit(event)" class="space-y-4">
+                <input type="hidden" id="edit-todo-id">
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Task Title</label>
+                    <input type="text" id="edit-todo-title" required class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 outline-none transition">
+                </div>
+
+                <div class="flex items-center gap-2 pt-1">
+                    <input type="checkbox" id="edit-todo-completed" class="w-4 h-4 rounded bg-slate-950 border-slate-800 text-indigo-600 focus:ring-indigo-500">
+                    <label for="edit-todo-completed" class="text-xs text-slate-300 select-none">Mark as completed</label>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3">
+                    <button type="button" onclick="closeEditModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium transition">Cancel</button>
+                    <button type="submit" id="btn-save-edit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-medium transition shadow-lg shadow-indigo-600/20">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Default Credentials Config
+        let config = {
+            appId: "j50HVgdkfS72Kx682iPfyrGhZNX5dtUtGbNZFrVW",
+            clientKey: "K0JBwyXcKKmELpFwIF4V8gt0NIdOIRb5Lbd5MgF4",
+            serverUrl: "https://parseapi.back4app.com/"
+        };
+
+        // Application State
+        let currentFilter = 'all';
+        let todosCache = [];
+
+        // Initialize SDK and App State on DOM Load
+        window.addEventListener('DOMContentLoaded', () => {
+            initParse();
+            populateConfigForm();
+            checkAuthSession();
+        });
+
+        function initParse() {
+            Parse.initialize(config.appId, config.clientKey);
+            Parse.serverURL = config.serverUrl;
+        }
+
+        function populateConfigForm() {
+            document.getElementById('cfg-app-id').value = config.appId;
+            document.getElementById('cfg-client-key').value = config.clientKey;
+            document.getElementById('cfg-server-url').value = config.serverUrl;
+        }
+
+        function saveCredentials(e) {
+            e.preventDefault();
+            config.appId = document.getElementById('cfg-app-id').value.trim();
+            config.clientKey = document.getElementById('cfg-client-key').value.trim();
+            config.serverUrl = document.getElementById('cfg-server-url').value.trim();
+
+            initParse();
+            toggleConfigModal();
+            showToast('success', 'Parse credentials updated successfully');
+            checkAuthSession();
+        }
+
+        function checkAuthSession() {
+            const currentUser = Parse.User.current();
+            console.log(localStorage.getItem("user"));
+            const unauthView = document.getElementById('unauth-view');
+            const authView = document.getElementById('auth-view');
+            const userPill = document.getElementById('user-pill');
+            const userDispName = document.getElementById('user-display-name');
+
+            if (currentUser) {
+                unauthView.classList.add('hidden');
+                authView.classList.remove('hidden');
+                userPill.classList.remove('hidden');
+                userDispName.innerText = currentUser.getUsername() || currentUser.getEmail() || "Active User";
+                
+                fetchTodos();
+            } else {
+                authView.classList.add('hidden');
+                userPill.classList.add('hidden');
+                unauthView.classList.remove('hidden');
+            }
+        }
+
+        async function handleLogout() {
+            try {
+                await Parse.User.logOut();
+                showToast('info', 'Logged out successfully');
+                checkAuthSession();
+            } catch (error) {
+                showToast('error', error.message || 'Logout failed');
+            }
+        }
+
+        // Fetch user specific Todo items
+        async function fetchTodos() {
+            const container = document.getElementById('todo-list-container');
+            container.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-12 text-slate-500 gap-2">
+                    <div class="spinner border-slate-600 border-t-indigo-500 w-6 h-6"></div>
+                    <span class="text-xs">Fetching items from Parse backend...</span>
+                </div>
+            `;
+
+            try {
+                const currentUser = Parse.User.current();
+                if (!currentUser) return;
+
+                const TodoClass = Parse.Object.extend("Todo");
+                const query = new Parse.Query(TodoClass);
+                
+                // Security Check: Query only current user's items
+                query.equalTo("user", currentUser);
+                query.descending("createdAt");
+
+                const results = await query.find();
+                todosCache = results;
+                renderTodoList();
+                updateBadges();
+            } catch (error) {
+                container.innerHTML = `
+                    <div class="bg-rose-500/10 border border-rose-500/20 text-rose-300 p-4 rounded-xl text-xs text-center">
+                        <i class="fa-solid fa-circle-exclamation text-sm mb-1"></i>
+                        <p>Error loading todos: ${error.message}</p>
+                    </div>
+                `;
+                showToast('error', error.message || 'Failed to fetch tasks');
+            }
+        }
+
+        function renderTodoList() {
+            const container = document.getElementById('todo-list-container');
+            const searchQuery = document.getElementById('search-todo').value.toLowerCase().trim();
+
+            let filtered = todosCache.filter(todo => {
+                const titleMatch = (todo.get("title") || "").toLowerCase().includes(searchQuery);
+                const isCompleted = todo.get("completed") === true;
+
+                if (currentFilter === 'active') return titleMatch && !isCompleted;
+                if (currentFilter === 'completed') return titleMatch && isCompleted;
+                return titleMatch;
+            });
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-slate-900/40 border border-slate-800/40 rounded-2xl p-10 text-center text-slate-500">
+                        <i class="fa-regular fa-clipboard text-3xl mb-2 opacity-50"></i>
+                        <p class="text-xs">No tasks found</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = filtered.map(todo => {
+                const id = todo.id;
+                const title = escapeHtml(todo.get("title") || "");
+                const completed = todo.get("completed") === true;
+
+                return `
+                    <div class="group flex items-center justify-between p-3.5 bg-slate-900/80 hover:bg-slate-900 border border-slate-800/80 hover:border-slate-700/80 rounded-xl transition shadow-md backdrop-blur-xl">
+                        <div class="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                            <button onclick="toggleTodoStatus('${id}', ${!completed})" class="text-slate-500 hover:text-indigo-400 transition">
+                                ${completed 
+                                    ? '<i class="fa-solid fa-circle-check text-indigo-400 text-lg"></i>' 
+                                    : '<i class="fa-regular fa-circle text-slate-600 hover:text-indigo-400 text-lg"></i>'}
+                            </button>
+                            <span class="text-xs font-medium truncate ${completed ? 'line-through text-slate-500' : 'text-slate-200'}">
+                                ${title}
+                            </span>
+                        </div>
+
+                        <div class="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition">
+                            <button onclick="openEditModal('${id}')" class="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 rounded-lg transition" title="Edit">
+                                <i class="fa-solid fa-pen text-xs"></i>
+                            </button>
+                            <button onclick="deleteTodo('${id}')" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition" title="Delete">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function handleCreateTodo(e) {
+            e.preventDefault();
+            const input = document.getElementById('new-todo-title');
+            const title = input.value.trim();
+            const btn = document.getElementById('btn-add-todo');
+
+            if (!title) return;
+
+            const currentUser = Parse.User.current();
+            if (!currentUser) {
+                showToast('error', 'Authentication lost. Please log in again.');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = `<div class="spinner"></div>`;
+
+            try {
+                const Todo = Parse.Object.extend("Todo");
+                const todo = new Todo();
+
+                todo.set("title", title);
+                todo.set("completed", false);
+                todo.set("user", currentUser);
+
+                // ACL Enforcement: Restrict permissions exclusively to current user
+                const acl = new Parse.ACL(currentUser);
+                acl.setPublicReadAccess(false);
+                acl.setPublicWriteAccess(false);
+                todo.setACL(acl);
+
+                await todo.save();
+                input.value = '';
+                showToast('success', 'Task added');
+                await fetchTodos();
+            } catch (error) {
+                showToast('error', error.message || 'Failed to create task');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fa-solid fa-plus"></i><span class="hidden sm:inline">Add Task</span>`;
+            }
+        }
+
+        async function toggleTodoStatus(id, newCompletedState) {
+            try {
+                const todo = todosCache.find(t => t.id === id);
+                if (!todo) return;
+
+                todo.set("completed", newCompletedState);
+                await todo.save();
+                
+                showToast('success', newCompletedState ? 'Task completed' : 'Task reopened');
+                renderTodoList();
+                updateBadges();
+            } catch (error) {
+                showToast('error', error.message || 'Failed to update status');
+                fetchTodos(); // Sync back
+            }
+        }
+
+        function openEditModal(id) {
+            const todo = todosCache.find(t => t.id === id);
+            if (!todo) return;
+
+            document.getElementById('edit-todo-id').value = id;
+            document.getElementById('edit-todo-title').value = todo.get("title") || "";
+            document.getElementById('edit-todo-completed').checked = todo.get("completed") === true;
+
+            document.getElementById('edit-modal').classList.remove('hidden');
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-modal').classList.add('hidden');
+        }
+
+        async function handleSaveEdit(e) {
+            e.preventDefault();
+            const id = document.getElementById('edit-todo-id').value;
+            const newTitle = document.getElementById('edit-todo-title').value.trim();
+            const newCompleted = document.getElementById('edit-todo-completed').checked;
+            const btn = document.getElementById('btn-save-edit');
+
+            if (!newTitle) return;
+
+            btn.disabled = true;
+            btn.innerHTML = `<div class="spinner"></div>`;
+
+            try {
+                const todo = todosCache.find(t => t.id === id);
+                if (todo) {
+                    todo.set("title", newTitle);
+                    todo.set("completed", newCompleted);
+                    await todo.save();
+                    
+                    showToast('success', 'Task updated');
+                    closeEditModal();
+                    renderTodoList();
+                    updateBadges();
+                }
+            } catch (error) {
+                showToast('error', error.message || 'Failed to update task');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Save Changes";
+            }
+        }
+
+        async function deleteTodo(id) {
+            try {
+                const todo = todosCache.find(t => t.id === id);
+                if (!todo) return;
+
+                await todo.destroy();
+                todosCache = todosCache.filter(t => t.id !== id);
+                showToast('info', 'Task deleted');
+                renderTodoList();
+                updateBadges();
+            } catch (error) {
+                showToast('error', error.message || 'Failed to delete task');
+            }
+        }
+
+        function setFilter(filter) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('bg-indigo-600', 'text-white');
+                btn.classList.add('text-slate-400');
+            });
+
+            const activeBtn = document.getElementById(`filter-${filter}`);
+            if (activeBtn) {
+                activeBtn.classList.add('bg-indigo-600', 'text-white');
+                activeBtn.classList.remove('text-slate-400');
+            }
+
+            renderTodoList();
+        }
+
+        function applyFilterAndSearch() {
+            renderTodoList();
+        }
+
+        function updateBadges() {
+            const total = todosCache.length;
+            const done = todosCache.filter(t => t.get("completed") === true).length;
+            const pending = total - done;
+
+            document.getElementById('badge-total').innerText = `${total} Total`;
+            document.getElementById('badge-pending').innerText = `${pending} Active`;
+            document.getElementById('badge-completed').innerText = `${done} Done`;
+        }
+
+        function toggleConfigModal() {
+            const modal = document.getElementById('config-modal');
+            modal.classList.toggle('hidden');
+        }
+
+        function showToast(type, message) {
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toast-icon');
+            const msg = document.getElementById('toast-message');
+
+            toast.className = "fixed bottom-6 right-6 max-w-sm z-50 p-4 rounded-xl border shadow-2xl text-xs font-medium flex items-center gap-3 backdrop-blur-md form-fade-in";
+
+            if (type === "success") {
+                toast.classList.add('bg-emerald-500/10', 'border-emerald-500/20', 'text-emerald-300');
+                icon.className = "fa-solid fa-circle-check text-emerald-400";
+            } else if (type === "error") {
+                toast.classList.add('bg-rose-500/10', 'border-rose-500/20', 'text-rose-300');
+                icon.className = "fa-solid fa-circle-exclamation text-rose-400";
+            } else {
+                toast.classList.add('bg-indigo-500/10', 'border-indigo-500/20', 'text-indigo-300');
+                icon.className = "fa-solid fa-circle-info text-indigo-400";
+            }
+
+            msg.innerText = message;
+            toast.classList.remove('hidden');
+
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3000);
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/[&<>"']/g, function(m) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                }[m];
+            });
+        }
+    </script>
+</body>
+</html>
